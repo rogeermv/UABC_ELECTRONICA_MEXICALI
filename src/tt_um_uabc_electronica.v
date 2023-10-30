@@ -1,4 +1,4 @@
-`timescale 1ns / 1ps
+`default_nettype none
 
 module tt_um_suabc_electronica #( parameter MAX_COUNT = 24'd10_000_000 ) (
     input  wire [7:0] ui_in,    // Dedicated inputs - connected to the input switches
@@ -44,8 +44,8 @@ module tt_um_suabc_electronica #( parameter MAX_COUNT = 24'd10_000_000 ) (
                 // increment digit
                 digit <= digit + 1'b1;
 
-                // only count from 0 to 9
-                if (digit == 9)
+                // only count from 0 to 16
+                if (digit == 16)
                     digit <= 0;
 
             end else
