@@ -1,80 +1,60 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 29.10.2023 18:40:57
-// Design Name: 
-// Module Name: tt_um_uabc_electronica
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
 
+module tt_um_suabc_electronica #( parameter MAX_COUNT = 24'd10_000_000 ) (
+    input  wire [7:0] ui_in,    // Dedicated inputs - connected to the input switches
+    output wire [7:0] uo_out,   // Dedicated outputs - connected to the 7 segment display
+    input  wire [7:0] uio_in,   // IOs: Bidirectional Input path
+    output wire [7:0] uio_out,  // IOs: Bidirectional Output path
+    output wire [7:0] uio_oe,   // IOs: Bidirectional Enable path (active high: 0=input, 1=output)
+    input  wire       ena,      // will go high when the design is enabled
+    input  wire       clk,      // clock
+    input  wire       rst_n     // reset_n - low to reset
+);
+ 
+    wire reset = ! rst_n;
+    wire [6:0] led_out;
+    assign uo_out[6:0] = led_out;
+    assign uo_out[7] = 1'b0;
 
-module tt_um_uabc_electronica(
-    input clk,
-    output reg PULSO,
-    input ACTIVAR,
-    
-    output reg [6:0] seg,
-    output reg [3:0] an
-    );
-    
-    reg reloj;
-    reg [25:0] cont = 0;
-    
-    integer LETRA = 0;
-        
+    // use bidirectionals as outputs
+    assign uio_oe = 8'b11111111;
+
+    // put bottom 8 bits of second counter out on the bidirectional gpio
+    assign uio_out = second_counter[7:0];
+
+    // external clock is 10MHz, so need 24 bit counter
+    reg [23:0] second_counter;
+    reg [3:0] digit;
+
+    // if external inputs are set then use that as compare count
+    // otherwise use the hard coded MAX_COUNT
+    wire [23:0] compare = ui_in == 0 ? MAX_COUNT: {6'b0, ui_in[7:0], 10'b0};
+
     always @(posedge clk) begin
-        cont <= cont + 1;
-        if(cont == 5000) begin
-            cont <= 0;
-            reloj <= ~reloj;
-            PULSO <= ~PULSO;
+        // if reset, set counter to 0
+        if (reset) begin
+            second_counter <= 0;
+            digit <= 0;
+        end else begin
+            // if up to 16e6
+            if (second_counter == compare) begin
+                // reset
+                second_counter <= 0;
+
+                // increment digit
+                digit <= digit + 1'b1;
+
+                // only count from 0 to 9
+                if (digit == 9)
+                    digit <= 0;
+
+            end else
+                // increment counter
+                second_counter <= second_counter + 1'b1;
         end
     end
-    
-    always @(posedge reloj) begin
-        if (ACTIVAR == 1) begin
-            an <= 4'b1110;
-            if (LETRA == 16) begin
-                LETRA <= 0;
-            end else
-                LETRA <= LETRA + 1; 
-        end else if (ACTIVAR == 0) begin
-            an <= 4'b1111; 
-            LETRA <= 0;  
-        end    
-    end
-    
-    always @(LETRA) begin
-        case(LETRA)
-            5'b00000: seg = 7'b1111111;
-            5'b00001: seg = 7'b1000001; //U
-            5'b00010: seg = 7'b0001000; //A
-            5'b00011: seg = 7'b0000011; //B
-            5'b00100: seg = 7'b1000110; //C
-            5'b00101: seg = 7'b0111111; //-
-            5'b00110: seg = 7'b0000110; //E
-            5'b00111: seg = 7'b1000111; //L 
-            5'b01000: seg = 7'b0000110; //E
-            5'b01001: seg = 7'b1000110; //C
-            5'b01010: seg = 7'b1001110; //T
-            5'b01011: seg = 7'b0101111; //R
-            5'b01100: seg = 7'b1000000; //O
-            5'b01101: seg = 7'b0101011; //N
-            5'b01110: seg = 7'b1001111; //I
-            5'b01111: seg = 7'b1000110; //C
-            5'b10000: seg = 7'b0001000; //A
-        endcase
-    end
+
+    // instantiate segment display
+    seg7 seg7(.counter(digit), .segments(led_out));
+
 endmodule
